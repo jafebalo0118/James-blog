@@ -16,7 +16,6 @@ from werkzeug.security import generate_password_hash, check_password_hash
 # Import your forms from the forms.py
 from forms import CreatePostForm, RegisterForm, LoginForm, CommentForm
 
-
 '''
 Make sure the required packages are installed: 
 Open the Terminal in PyCharm (bottom left). 
@@ -31,7 +30,7 @@ This will install the packages from the requirements.txt for this project.
 '''
 load_dotenv("C:/Users/jafeb/PycharmProjects/day-69-starting-files-blog-with-users/.env.txt")
 app = Flask(__name__)
-app.config['SECRET_KEY'] = '8BYkEfBA6O6donzWlSihBXox7C0sKR6b'
+app.config['SECRET_KEY'] = os.getenv("FLASK_SECRET_KEY")
 ckeditor = CKEditor(app)
 Bootstrap5(app)
 
@@ -39,17 +38,20 @@ Bootstrap5(app)
 login_manager = LoginManager()
 login_manager.init_app(app)
 
+
 # CREATE DATABASE
 class Base(DeclarativeBase):
     pass
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///posts.db'
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv("DB_URI", 'sqlite:///posts.db')
 db = SQLAlchemy(model_class=Base)
 db.init_app(app)
 
 
 # CONFIGURE TABLES
 # TODO: Create a User table for all your registered users (ALREADY - OK).
-class User (UserMixin, db.Model):
+class User(UserMixin, db.Model):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(250), unique=True, nullable=False)
@@ -81,6 +83,7 @@ class Comment(db.Model):
     comment_author = relationship("User", back_populates="comments")
     comment_post = relationship("BlogPost", back_populates="comments")
 
+
 with app.app_context():
     db.create_all()
 
@@ -93,12 +96,14 @@ def load_user(user_id):
 def admin_only(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        #If id is not 1 then return abort with 403 error
+        # If id is not 1 then return abort with 403 error
         if current_user.id != 1:
             return abort(403)
-        #Otherwise continue with the route function
+        # Otherwise continue with the route function
         return f(*args, **kwargs)
+
     return decorated_function
+
 
 # TODO: Use Werkzeug to hash the user's password when creating a new user.
 @app.route('/register', methods=["GET", "POST"])
@@ -111,7 +116,8 @@ def register():
             flash(f"The email {email} have been registered already, try Log in instead")
             return redirect(url_for("login"))
         else:
-            hashed_password = generate_password_hash(password=register_form.password.data, method='pbkdf2:sha256', salt_length=8)
+            hashed_password = generate_password_hash(password=register_form.password.data, method='pbkdf2:sha256',
+                                                     salt_length=8)
             new_user = User(
                 email=email,
                 password=hashed_password,
@@ -121,7 +127,7 @@ def register():
             db.session.commit()
             login_user(new_user)
             return redirect(url_for("get_all_posts"))
-    return render_template("register.html", form = register_form)
+    return render_template("register.html", form=register_form)
 
 
 # TODO: Retrieve a user from the database based on their email. 
@@ -158,6 +164,7 @@ def get_all_posts():
     posts = result.scalars().all()
     return render_template("index.html", all_posts=posts, current_user=current_user)
 
+
 gravatar = Gravatar(app,
                     size=100,
                     rating='g',
@@ -166,6 +173,7 @@ gravatar = Gravatar(app,
                     force_lower=False,
                     use_ssl=False,
                     base_url=None)
+
 
 # TODO: Allow logged-in users to comment on posts
 @app.route("/post/<int:post_id>", methods=["GET", "POST"])
@@ -182,11 +190,11 @@ def show_post(post_id):
             text=comment_form.comment.data,
             author_id=current_user.id,
             post_id=requested_post.id
-            )
+        )
         db.session.add(new_comment)
         db.session.commit()
         return redirect(url_for("show_post", post_id=post_id))
-    #Call all comments from specific post
+    # Call all comments from specific post
     comments = db.session.execute(db.select(Comment).where(Comment.post_id == post_id)).scalars().all()
     return render_template("post.html",
                            post=requested_post,
@@ -260,4 +268,4 @@ def contact():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5002)
+    app.run(debug=False, port=5002)
